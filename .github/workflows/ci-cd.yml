@@ -1,0 +1,131 @@
+# CI/CD for the orders service.
+#
+# A pull request runs the unit tests and lints the chart.
+# A push to main builds the image once, pushes it, and deploys it to staging.
+# A prod release is a manual run of this workflow. It waits for approval on the
+# prod environment before it proceeds.
+#
+# The image is tagged with the commit SHA, so prod deploys the exact build that
+# landed on main and was tested on staging, and a rollback is a redeploy of an
+# older SHA. Run the workflow from main so that SHA's image already exists.
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   DOCKERHUB_USERNAME     Docker Hub username (also the image namespace)
+#   DOCKERHUB_TOKEN        Docker Hub access token
+#   AZURE_CLIENT_ID        Client ID of the user-assigned managed identity (OIDC)
+#   AZURE_TENANT_ID        Tenant ID
+#   AZURE_SUBSCRIPTION_ID  Subscription ID
+#   AKS_RESOURCE_GROUP     Resource group holding the AKS cluster
+#   AKS_CLUSTER_NAME       AKS cluster name
+#
+# Azure login uses OIDC, so no client secret is stored. The managed identity
+# needs one federated credential per environment, with subject
+#   repo:Cloud-Computing-FRI/delivery-app-orders:environment:<staging|prod>
+#
+# All four services deploy into the same namespace (the environment name) so the
+# stable Service names resolve each other. For prod the managed database and the
+# db-orders Secret must already exist. This workflow does not create them.
+
+name: orders CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit-test the order use cases
+        run: |
+          pip install -r requirements.txt pytest
+          pytest
+      - uses: azure/setup-helm@v4
+      - name: Lint the chart
+        run: helm lint helm
+
+  build:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push the image
+        run: |
+          image="${{ secrets.DOCKERHUB_USERNAME }}/delivery-app-orders:${IMAGE_TAG}"
+          docker build -t "$image" .
+          docker push "$image"
+
+  deploy-staging:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      id-token: write   # required for OIDC login to Azure
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+      - uses: azure/setup-helm@v4
+      - name: Helm upgrade --install (staging)
+        run: |
+          helm upgrade --install orders helm \
+            -f helm/values-staging.yaml \
+            --namespace staging --create-namespace \
+            --set image.username=${{ secrets.DOCKERHUB_USERNAME }} \
+            --set image.tag=${IMAGE_TAG} \
+            --wait --timeout 5m
+
+  deploy-prod:
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      id-token: write   # required for OIDC login to Azure
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+      - uses: azure/setup-helm@v4
+      - name: Helm upgrade --install (prod)
+        run: |
+          helm upgrade --install orders helm \
+            -f helm/values-prod.yaml \
+            --namespace prod --create-namespace \
+            --set image.username=${{ secrets.DOCKERHUB_USERNAME }} \
+            --set image.tag=${IMAGE_TAG} \
+            --wait --timeout 5m

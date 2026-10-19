@@ -1,7 +1,7 @@
 orders service "{{ .Release.Name }}" installed (chart {{ include "orders.chart" . }}).
 
 Service: {{ include "orders.fullname" . }} (type {{ .Values.service.type }}, port {{ .Values.port }})
-Database: {{ if .Values.postgresql.enabled }}in-cluster PostgreSQL ({{ include "orders.fullname" . }}-db){{ else }}external — DATABASE_URL read from Secret "{{ include "orders.dbSecret" . }}"{{ end }}.
+Database: {{ if .Values.postgresql.enabled }}in-cluster PostgreSQL ({{ include "orders.fullname" . }}-db){{ else }}external. DATABASE_URL read from Secret "{{ include "orders.dbSecret" . }}"{{ end }}.
 
 Calls these siblings (override via .Values.peers if their names differ):
 {{- range $envName, $url := .Values.peers }}
