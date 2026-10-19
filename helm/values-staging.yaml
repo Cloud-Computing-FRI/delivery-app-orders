@@ -1,0 +1,18 @@
+# Staging: still in-cluster Postgres, but with modest resource requests/limits
+# so it behaves more like production.
+image:
+  tag: staging
+
+postgresql:
+  enabled: true
+
+database:
+  manageSecret: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi

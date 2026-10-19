@@ -1,0 +1,6 @@
+apiVersion: v2
+name: orders
+description: The orders microservice (clean-architecture FastAPI service + its own PostgreSQL) as a standalone Helm chart.
+type: application
+version: 0.1.0
+appVersion: "1.0"

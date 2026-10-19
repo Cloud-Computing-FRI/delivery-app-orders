@@ -1,0 +1,17 @@
+orders service "{{ .Release.Name }}" installed (chart {{ include "orders.chart" . }}).
+
+Service: {{ include "orders.fullname" . }} (type {{ .Values.service.type }}, port {{ .Values.port }})
+Database: {{ if .Values.postgresql.enabled }}in-cluster PostgreSQL ({{ include "orders.fullname" . }}-db){{ else }}external — DATABASE_URL read from Secret "{{ include "orders.dbSecret" . }}"{{ end }}.
+
+Calls these siblings (override via .Values.peers if their names differ):
+{{- range $envName, $url := .Values.peers }}
+  {{ $envName }} = {{ $url }}
+{{- end }}
+
+Check it from inside the cluster:
+  kubectl port-forward svc/{{ include "orders.fullname" . }} 8000:{{ .Values.port }}
+  curl http://localhost:8000/health
+
+List the release:   helm list
+Upgrade an env:     helm upgrade {{ .Release.Name }} <chart> -f values-<env>.yaml
+Roll back:          helm rollback {{ .Release.Name }}

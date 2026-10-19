@@ -1,0 +1,22 @@
+# Production: pinned image tag, more replicas, and a managed PostgreSQL instead
+# of an in-cluster pod. The DATABASE_URL Secret is created out of band (see the
+# README), so no password lives in git.
+image:
+  tag: v1
+
+replicas: 2
+
+postgresql:
+  enabled: false
+
+database:
+  manageSecret: false
+  existingSecret: db-orders
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

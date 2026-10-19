@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "orders.fullname" . }}
+  labels:
+    {{- include "orders.labels" . | nindent 4 }}
+    {{- include "orders.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "orders.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "orders.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: orders
+          image: "{{ .Values.image.username }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.port }}
+          env:
+            {{- /* Sibling service URLs. */}}
+            {{- range $envName, $url := .Values.peers }}
+            - name: {{ $envName }}
+              value: {{ $url | quote }}
+            {{- end }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "orders.dbSecret" . }}
+                  key: DATABASE_URL
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.port }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.port }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

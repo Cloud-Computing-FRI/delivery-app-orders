@@ -1,0 +1,12 @@
+# Development: in-cluster Postgres, smallest footprint, reached by port-forward.
+image:
+  tag: dev
+
+service:
+  type: ClusterIP
+
+postgresql:
+  enabled: true
+
+database:
+  manageSecret: true
