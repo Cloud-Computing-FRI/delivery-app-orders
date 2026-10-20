@@ -8,7 +8,7 @@ them with the Azure CLI, and how to manage the cluster with `kubectl` live on th
 organization profile:
 https://github.com/Cloud-Computing-FRI/.github
 
-Two things are specific to this repository. The workflow logs in to Azure with
+The workflow logs in to Azure with
 OIDC under the subject
 `repo:Cloud-Computing-FRI/delivery-app-orders:environment:<staging|prod>`, and in
 prod it reads `DATABASE_URL` from the pre-created `db-orders` Secret.
